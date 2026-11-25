@@ -1,0 +1,295 @@
+/* =========================================================================
+   ChessGame — ธีม Nordic มินิมอล
+   หลักการ: พื้นเรียบ ไม่มี gradient ตกแต่ง ไม่มีเงา ไม่มีไอคอน
+            แบ่งส่วนด้วยเส้นขอบเทาบาง 1px และใช้สีเน้นเพียงสีเดียว
+   สีทั้งหมดอยู่ใน CSS variables 2 ชุด สลับด้วย <html data-theme="light|dark">
+   ========================================================================= */
+
+/* ---------- ชุดสี Light (ค่าเริ่มต้น) ---------- */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F7F8FA;          /* พื้นหลังหน้า */
+  --surface: #FFFFFF;     /* พื้นแผง */
+  --surface-alt: #F0F2F5; /* พื้นช่องภาพ / ปุ่มรอง */
+  --text: #1F2937;        /* ตัวอักษรหลัก */
+  --muted: #6B7280;       /* ตัวอักษรรอง */
+  --border: #E2E5EA;      /* เส้นขอบเทาบาง */
+  --sq-light: #DEE3EA;    /* ช่องสว่างของกระดาน */
+  --sq-dark: #8CA2C0;     /* ช่องเข้มของกระดาน */
+  --accent: #3B82F6;      /* สีเน้น: ปุ่มหลัก ลูกศรแนะนำ สถานะเชื่อมต่อ */
+  --accent-ink: #FFFFFF;  /* ตัวอักษรบนพื้นสีเน้น */
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --danger: #DC2626;      /* เตือนเดินผิด (เหมือนกันทั้งสองโหมด) */
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --last-move: rgba(59, 130, 246, 0.28);
+}
+
+/* ---------- ชุดสี Dark ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111827;
+  --surface: #161F2E;
+  --surface-alt: #1C2636;
+  --text: #E5E7EB;
+  --muted: #9CA3AF;
+  --border: #2B3647;
+  --sq-light: #4B5B73;
+  --sq-dark: #2A3647;
+  --accent: #60A5FA;
+  --accent-ink: #0B1220;
+  --accent-soft: rgba(96, 165, 250, 0.14);
+  --danger: #DC2626;
+  --danger-soft: rgba(220, 38, 38, 0.14);
+  --last-move: rgba(96, 165, 250, 0.30);
+}
+
+/* ---------- พื้นฐาน ---------- */
+* { box-sizing: border-box; }
+/* attribute hidden ต้องชนะ class ที่ตั้ง display ไว้ (เช่น .fallback-board ที่เป็น grid) */
+[hidden] { display: none !important; }
+html, body { background: var(--bg); }
+body {
+  margin: 0;
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Leelawadee UI", "Noto Sans Thai", sans-serif;
+}
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: 18px; font-weight: 600; }
+h2 { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+a { color: inherit; }
+button { font: inherit; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.muted { color: var(--muted); font-size: 12px; }
+
+/* ---------- แถบบน: ชื่อระบบ เมนู สถานะ และปุ่มสลับธีม (มุมขวาบน) ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.brand { font-weight: 700; text-decoration: none; letter-spacing: -.01em; }
+.nav { display: flex; gap: 16px; }
+.nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
+.nav a:hover, .nav a[aria-current="page"] { color: var(--text); }
+.topbar-end { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+
+.theme-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.theme-toggle button {
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.theme-toggle button + button { border-left: 1px solid var(--border); }
+.theme-toggle button.is-active { background: var(--surface-alt); color: var(--text); font-weight: 600; }
+
+/* ป้ายสถานะ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pill.is-ok { border-color: var(--accent); color: var(--accent); }
+.pill.is-bad { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- แผง ---------- */
+.panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-body { padding: 14px; }
+
+/* รายการ ชื่อ–ค่า ในแผง AI / ML */
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; margin: 0; }
+.kv dt { color: var(--muted); font-size: 12px; }
+.kv dd { margin: 0; text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+.kv dd code { font-size: 11px; font-weight: 400; }
+.note { margin-top: 12px; color: var(--muted); font-size: 11px; }
+
+/* ---------- เลย์เอาต์หน้า /board ----------
+   ซ้าย: ภาพกล้อง + ภาพดัดตรง | กลาง: บอร์ดจำลอง | ขวา: AI, ML, ประวัติ
+   ล่าง: ปุ่ม New game / Calibrate / Undo */
+.board-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(340px, 1.6fr) minmax(220px, 1fr);
+  grid-template-areas: "left center right";
+  gap: 16px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  align-items: start;
+}
+.col-left { grid-area: left; }
+.col-center { grid-area: center; }
+.col-right { grid-area: right; }
+.col-left, .col-center, .col-right { display: grid; gap: 16px; min-width: 0; }
+
+/* ช่องแสดงภาพ (กล้องสด / ภาพดัดตรง) */
+.image-well {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.image-well.square { aspect-ratio: 1; }
+.image-well img { width: 100%; height: 100%; object-fit: contain; }
+.panel > .image-well { border-radius: 0 0 7px 7px; }
+
+/* แถบเตือนเดินผิดกฎ (สีแดง) — ซ่อนไว้จนกว่าระบบจะตรวจพบ */
+.alert {
+  padding: 10px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+.alert[hidden] { display: none; }
+.error-message { color: var(--danger); font-size: 12px; }
+.error-message:empty { display: none; }
+
+/* ---------- กระดาน ---------- */
+.board-wrap { width: 100%; max-width: 560px; margin: 0 auto; aspect-ratio: 1; }
+.cg-board-wrap, .fallback-board { width: 100%; height: 100%; }
+
+/* สีช่องกระดานของ Chessground อ่านจาก CSS variables เพื่อให้เปลี่ยนตามธีมทันที
+   conic-gradient ตรงนี้ใช้วาด "ลายตาราง 2x2" แบบขอบคม (ไม่ได้ไล่สีตกแต่ง)
+   ช่องบนซ้าย (a8) เป็นช่องสว่าง ช่อง a1 มุมล่างซ้ายเป็นช่องเข้ม ตามกติกาหมากรุก */
+.cg-wrap cg-board {
+  background-color: var(--sq-dark);
+  background-image: conic-gradient(
+    var(--sq-dark) 0 25%, var(--sq-light) 0 50%, var(--sq-dark) 0 75%, var(--sq-light) 0
+  );
+  background-size: 25% 25%;
+}
+.cg-wrap cg-board square.last-move { background-color: var(--last-move); }
+.cg-wrap cg-board square.check { background: var(--danger-soft); outline: 3px solid var(--danger); outline-offset: -3px; }
+
+/* พิกัด a–h / 1–8: ตัวอักษรบนช่องสว่างใช้สีช่องเข้ม และกลับกัน
+   ฝั่งขาว: ตัว "A" และเลข "1" อยู่บนช่อง a1 ซึ่งเป็นช่องเข้ม จึงใช้สีช่องสว่าง (ลำดับคี่)
+   ฝั่งดำ: กระดานกลับด้าน ลำดับคี่ไปอยู่บนช่องสว่าง จึงสลับสี */
+.cg-wrap coords { opacity: 1; font-weight: 600; }
+.cg-wrap.orientation-white .ranks :nth-child(odd),
+.cg-wrap.orientation-white .files :nth-child(odd),
+.cg-wrap.orientation-black .ranks :nth-child(even),
+.cg-wrap.orientation-black .files :nth-child(even) { color: var(--sq-light); }
+.cg-wrap.orientation-white .ranks :nth-child(even),
+.cg-wrap.orientation-white .files :nth-child(even),
+.cg-wrap.orientation-black .ranks :nth-child(odd),
+.cg-wrap.orientation-black .files :nth-child(odd) { color: var(--sq-dark); }
+
+/* กระดานสำรอง (ใช้เมื่อโหลด Chessground ไม่ได้) */
+.fallback-board { display: grid; grid-template-columns: repeat(8, 1fr); }
+.fallback-square {
+  display: grid;
+  position: relative;
+  place-items: center;
+  color: #111827;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif;
+  font-size: clamp(20px, 4.5vw, 42px);
+}
+.fallback-square.light { background: var(--sq-light); }
+.fallback-square.dark { background: var(--sq-dark); }
+.fallback-square.suggested { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---------- ประวัติตาเดิน: เลขตา | ขาว | ดำ ---------- */
+.history {
+  display: grid;
+  grid-template-columns: 2.5em 1fr 1fr;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+/* display:block ปิดเลขลำดับอัตโนมัติของ <li> (เราแสดงเลขตาเองในคอลัมน์แรก) */
+.history > * { display: block; padding: 4px 14px; border-bottom: 1px solid var(--border); }
+.history .num { color: var(--muted); padding-right: 0; }
+.history .empty { grid-column: 1 / -1; color: var(--muted); font-size: 12px; border: 0; padding: 14px; }
+
+/* ---------- ปุ่ม ---------- */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button:hover { border-color: var(--muted); }
+.button:focus-visible, .theme-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.button:disabled { cursor: not-allowed; opacity: .45; }
+.button-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.button-primary:hover { border-color: var(--accent); opacity: .9; }
+.button-ghost { border-color: transparent; background: transparent; color: var(--muted); font-weight: 400; }
+.button-ghost:hover { border-color: var(--border); color: var(--text); }
+
+/* แถบปุ่มด้านล่างหน้า /board */
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 12px 24px 24px;
+}
+.action-bar .test-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* ---------- หน้า /camera และ /calibrate ---------- */
+.narrow-page { max-width: 760px; margin: 0 auto; padding: 16px 24px 32px; }
+.video-frame { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--surface-alt); }
+.video-frame video { width: 100%; height: 100%; object-fit: contain; }
+.video-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); }
+.metric { margin-left: auto; color: var(--muted); font-size: 12px; }
+.metric strong { margin-left: 4px; color: var(--text); }
+
+/* ---------- จอแคบ ---------- */
+@media (max-width: 1100px) {
+  /* บอร์ดขึ้นบนเต็มแถว แล้ววางแผงซ้าย/ขวาคู่กันด้านล่าง */
+  .board-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "center center" "left right";
+  }
+}
+@media (max-width: 680px) {
+  .topbar { flex-wrap: wrap; gap: 10px 16px; padding: 10px 16px; }
+  .board-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "center" "left" "right"; padding: 12px 16px; gap: 12px; }
+  .action-bar { padding: 0 16px 20px; }
+  .action-bar .test-tools { margin-left: 0; }
+  .narrow-page { padding: 12px 16px 24px; }
+}

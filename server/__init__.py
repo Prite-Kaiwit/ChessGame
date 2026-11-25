@@ -1,0 +1,1 @@
+"""ChessGame application package."""

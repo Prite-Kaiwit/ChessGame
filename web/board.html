@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChessGame · กระดาน</title>
+  <!-- กำหนดธีมก่อนวาดหน้า เพื่อไม่ให้กะพริบ -->
+  <script src="/static/js/theme.js"></script>
+  <link rel="stylesheet" href="/static/vendor/chessground.base.css">
+  <link rel="stylesheet" href="/static/vendor/chessground.cburnett.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/board">ChessGame</a>
+    <nav class="nav">
+      <a href="/board" aria-current="page">Board</a>
+      <a href="/camera">Camera</a>
+      <a href="/calibrate">Calibrate</a>
+    </nav>
+    <div class="topbar-end">
+      <span id="board-connection" class="pill">กำลังเชื่อมต่อ</span>
+      <div class="theme-toggle" role="group" aria-label="ธีม">
+        <button type="button" data-theme-value="light">Light</button>
+        <button type="button" data-theme-value="dark">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="board-layout">
+    <!-- ซ้าย: ภาพกล้องสด และภาพกระดานที่ดัดตรงแล้ว -->
+    <section class="col-left">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>ภาพกล้องสด</h2>
+          <span id="camera-fps" class="muted">รอภาพ</span>
+        </div>
+        <div class="image-well">
+          <img id="live-frame" alt="ภาพสดจากกล้อง" hidden>
+          <span id="live-placeholder">รอมือถือเชื่อมต่อกล้อง</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>กระดานที่ดัดตรง</h2>
+          <span id="dip-status" class="pill">ยังไม่ calibrate</span>
+        </div>
+        <div class="image-well square">
+          <img id="warped-frame" alt="ภาพกระดานหลัง perspective transform" hidden>
+          <span id="warped-placeholder">ภาพหลัง perspective transform จะแสดงที่นี่</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- กลาง: บอร์ดจำลอง -->
+    <section class="col-center">
+      <p id="move-warning" class="alert" role="alert" hidden>ตรวจพบการเดินผิดกฎ</p>
+      <div class="panel">
+        <div class="panel-head">
+          <h1>กระดาน</h1>
+          <span id="turn-indicator" class="pill">ขาวเดิน</span>
+        </div>
+        <div class="panel-body">
+          <div class="board-wrap">
+            <div id="chessboard" class="cg-board-wrap" aria-label="กระดานหมากรุก"></div>
+            <div id="fallback-board" class="fallback-board" aria-label="กระดานหมากรุกสำรอง" hidden></div>
+          </div>
+        </div>
+      </div>
+      <p id="board-error" class="error-message" role="status"></p>
+    </section>
+
+    <!-- ขวา: แผง AI, ML และประวัติตาเดิน -->
+    <aside class="col-right">
+      <div class="panel">
+        <div class="panel-head"><h2>AI · Minimax + Alpha-Beta</h2></div>
+        <div class="panel-body">
+          <dl class="kv">
+            <dt>ตาแนะนำ</dt><dd id="best-move">—</dd>
+            <dt>คะแนนประเมิน</dt><dd id="evaluation-value">—</dd>
+            <dt>ความลึก</dt><dd id="search-depth">—</dd>
+            <dt>FEN</dt><dd><code id="fen-value">—</code></dd>
+          </dl>
+          <p class="note">ตอนนี้ตาแนะนำเป็นการสุ่ม ยังไม่ได้มาจาก AI จริง</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>ML · จำแนกหมาก</h2></div>
+        <div class="panel-body">
+          <dl class="kv">
+            <dt>โมเดล</dt><dd id="ml-model">ยังไม่โหลด</dd>
+            <dt>ความมั่นใจเฉลี่ย</dt><dd id="ml-confidence">—</dd>
+            <dt>ช่องที่ไม่แน่ใจ</dt><dd id="ml-uncertain">—</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>ประวัติตาเดิน</h2></div>
+        <ol id="move-history" class="history"><li class="empty">ยังไม่มีการเดิน</li></ol>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ล่าง: ปุ่มควบคุมเกม -->
+  <footer class="action-bar">
+    <button id="new-game" type="button" class="button button-primary">New game</button>
+    <a class="button" href="/calibrate">Calibrate</a>
+    <button id="undo-move" type="button" class="button">Undo</button>
+    <div class="test-tools">
+      <span class="muted">โหมดทดสอบ</span>
+      <button id="random-move" type="button" class="button button-ghost">สุ่มเดิน</button>
+    </div>
+  </footer>
+
+  <script type="module" src="/static/js/board.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChessGame · กล้อง</title>
+  <script src="/static/js/theme.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/board">ChessGame</a>
+    <nav class="nav">
+      <a href="/board">Board</a>
+      <a href="/camera" aria-current="page">Camera</a>
+    </nav>
+    <div class="topbar-end">
+      <div class="theme-toggle" role="group" aria-label="ธีม">
+        <button type="button" data-theme-value="light">Light</button>
+        <button type="button" data-theme-value="dark">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="narrow-page">
+    <section class="panel">
+      <div class="panel-head">
+        <h1>กล้องกระดาน</h1>
+        <span id="connection-status" class="pill">ยังไม่เชื่อมต่อ</span>
+      </div>
+      <div class="video-frame">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <div id="video-placeholder" class="video-placeholder">กดเริ่มเพื่อเปิดกล้อง</div>
+      </div>
+      <div class="controls">
+        <button id="start-camera" type="button" class="button button-primary">เริ่มส่งภาพ</button>
+        <button id="stop-camera" type="button" class="button" disabled>หยุด</button>
+        <span class="metric">FPS <strong id="fps-value">0</strong></span>
+      </div>
+      <div class="panel-body" style="border-top: 1px solid var(--border)">
+        <p class="muted">ส่งภาพ JPEG กว้างไม่เกิน 640px ที่ 5 FPS · วางมือถือให้เห็นกระดานครบทั้ง 4 มุม</p>
+        <p id="camera-error" class="error-message" role="status"></p>
+      </div>
+    </section>
+  </main>
+  <script src="/static/js/camera.js"></script>
+</body>
+</html>
