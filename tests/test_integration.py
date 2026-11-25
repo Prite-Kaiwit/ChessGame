@@ -5,9 +5,11 @@
 
 import asyncio
 import json
+import os
 import ssl
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 import urllib.error
@@ -17,7 +19,13 @@ from pathlib import Path
 import websockets
 
 from server.config import CERT_FILE, KEY_FILE
+from server.dip.pipeline import decode_jpeg, encode_jpeg
 from server.gen_cert import ensure_certificate
+
+try:  # รันผ่าน "python -m unittest discover -s tests" หรือ "python -m unittest tests.xxx" ได้ทั้งคู่
+    from test_dip import camera_view, make_board, normalized_corners
+except ImportError:
+    from tests.test_dip import camera_view, make_board, normalized_corners
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = 8899
@@ -30,19 +38,31 @@ SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE
 
 
-def http(path: str, method: str = "GET") -> tuple[int, bytes]:
-    """ส่ง HTTP request แล้วคืน (status, body)"""
-    request = urllib.request.Request(BASE + path, method=method)
-    with urllib.request.urlopen(request, context=SSL_CTX, timeout=5) as response:
+def http(path: str, method: str = "GET", body: dict | None = None) -> tuple[int, bytes]:
+    """ส่ง HTTP request (แนบ JSON ได้) แล้วคืน (status, body)"""
+    data = None if body is None else json.dumps(body).encode()
+    headers = {} if body is None else {"Content-Type": "application/json"}
+    request = urllib.request.Request(BASE + path, data=data, method=method, headers=headers)
+    with urllib.request.urlopen(request, context=SSL_CTX, timeout=10) as response:
         return response.status, response.read()
 
 
-async def recv_json(ws) -> dict:
-    """รับข้อความถัดไปที่เป็น JSON โดยข้ามเฟรมภาพ (binary) ที่อาจค้างอยู่"""
+async def recv_json(ws, kind: str = "state") -> dict:
+    """รับข้อความ JSON ถัดไปที่มี type ตรงกับ kind โดยข้ามภาพและข้อความชนิดอื่น"""
     while True:
         message = await asyncio.wait_for(ws.recv(), 5)
         if isinstance(message, str):
-            return json.loads(message)
+            data = json.loads(message)
+            if data.get("type") == kind:
+                return data
+
+
+async def recv_image(ws, prefix: bytes) -> bytes:
+    """รับภาพถัดไปที่ขึ้นต้นด้วย prefix (0x01 กล้อง, 0x02 ภาพดัดตรง) คืนเฉพาะ JPEG"""
+    while True:
+        message = await asyncio.wait_for(ws.recv(), 5)
+        if isinstance(message, bytes) and message[:1] == prefix:
+            return message[1:]
 
 
 class LiveServerTests(unittest.TestCase):
@@ -51,6 +71,9 @@ class LiveServerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         ensure_certificate()
+        # ใช้โฟลเดอร์ข้อมูลชั่วคราว: ไม่ไปทับค่า calibrate จริงใน server/data/
+        cls.data_dir = tempfile.TemporaryDirectory()
+        env = {**os.environ, "CHESS_DATA_DIR": cls.data_dir.name}
         cls.server = subprocess.Popen(
             [
                 sys.executable, "-m", "uvicorn", "server.main:app",
@@ -59,6 +82,7 @@ class LiveServerTests(unittest.TestCase):
                 "--log-level", "warning",
             ],
             cwd=ROOT,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -77,6 +101,7 @@ class LiveServerTests(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.server.terminate()
         output, _ = cls.server.communicate(timeout=10)
+        cls.data_dir.cleanup()
         # log ระดับ warning ขึ้นไปต้องไม่มี traceback (เช่นตอน client หลุดกะทันหัน)
         if "Traceback" in output:
             raise AssertionError("พบ traceback ใน log ของเซิร์ฟเวอร์:\n" + output)
@@ -113,7 +138,7 @@ class LiveServerTests(unittest.TestCase):
                 for i in range(5):
                     await camera.send(b"\xff\xd8frame%d" % i)
                 await asyncio.sleep(0.3)
-                received = [await asyncio.wait_for(board.recv(), 5) for _ in range(2)]
+                received = [await recv_image(board, b"\x01") for _ in range(2)]
             self.assertEqual(received, [b"\xff\xd8frame0", b"\xff\xd8frame4"])
 
             # reset ต้องล้างประวัติ
@@ -150,6 +175,59 @@ class LiveServerTests(unittest.TestCase):
                 await camera.send(b"\xff\xd8x")
                 await asyncio.sleep(0.05)
         self.assertEqual(http("/board")[0], 200)
+
+    def test_05_calibration_and_dip_stream(self) -> None:
+        asyncio.run(self._calibration_and_dip_stream())
+
+    async def _calibration_and_dip_stream(self) -> None:
+        # ใช้ภาพกระดานสังเคราะห์ที่ถ่ายเฉียงชุดเดียวกับ unit test ของ DIP
+        jpeg = encode_jpeg(camera_view(make_board(), "bottom"), quality=90)
+
+        # ค่าเริ่มต้น: ยังไม่ calibrate (ใช้โฟลเดอร์ข้อมูลชั่วคราว)
+        self.assertFalse(json.loads(http("/api/calibration")[1])["calibrated"])
+
+        async with websockets.connect(f"{WSS}/ws/camera", ssl=SSL_CTX) as camera:
+            await camera.send(jpeg)
+            await asyncio.sleep(0.3)
+
+            # ภาพล่าสุดสำหรับหน้า calibrate
+            status, body = await asyncio.to_thread(http, "/api/frame/latest.jpg")
+            self.assertEqual((status, body), (200, jpeg))
+
+            # หามุมอัตโนมัติ: ต้องใกล้มุมจริง (คลาดได้ไม่เกิน 2% ของขนาดภาพ)
+            _, body = await asyncio.to_thread(http, "/api/calibration/auto", "POST")
+            found = json.loads(body)["corners"]
+            for got, expected in zip(found, normalized_corners()):
+                self.assertAlmostEqual(got[0], expected[0], delta=0.02)
+                self.assertAlmostEqual(got[1], expected[1], delta=0.02)
+
+            # ค่าผิดรูปแบบต้องได้ 422
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                await asyncio.to_thread(
+                    http, "/api/calibration", "POST", {"corners": [[0, 0]], "white_side": "bottom"}
+                )
+            self.assertEqual(caught.exception.code, 422)
+            caught.exception.close()
+
+            body = {"corners": normalized_corners(), "white_side": "bottom"}
+            _, preview = await asyncio.to_thread(http, "/api/calibration/preview", "POST", body)
+            self.assertEqual(decode_jpeg(preview).shape, (800, 800, 3))
+            await asyncio.to_thread(http, "/api/calibration", "POST", body)
+
+            # ส่งภาพเดิมซ้ำ: หน้า board ต้องได้ภาพดัดตรง และสถานะ "นิ่ง" ภายใน N เฟรม
+            async with websockets.connect(f"{WSS}/ws/board", ssl=SSL_CTX) as board:
+                still = False
+                for _ in range(10):
+                    await camera.send(jpeg)
+                    dip = await recv_json(board, "dip")
+                    self.assertTrue(dip["calibrated"])
+                    if dip["still"]:
+                        still = True
+                        break
+                    await asyncio.sleep(0.1)
+                self.assertTrue(still, "สถานะ DIP ไม่เปลี่ยนเป็นนิ่ง")
+                warped = await recv_image(board, b"\x02")
+                self.assertEqual(decode_jpeg(warped).shape, (800, 800, 3))
 
 
 if __name__ == "__main__":

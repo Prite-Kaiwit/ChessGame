@@ -1,5 +1,8 @@
 """จุดเริ่มต้น FastAPI และ HTTPS server"""
 
+import asyncio
+import contextlib
+import logging
 import sys
 
 import uvicorn
@@ -8,21 +11,64 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.config import CERT_FILE, HOST, KEY_FILE, PORT, STATIC_DIR, WEB_DIR
+from server.dip.pipeline import pipeline
 from server.gen_cert import ensure_certificate
 from server.game_state import game
 from server.hub import hub
+from server.routes.calibration_api import router as calibration_router
 from server.routes.game_api import router as game_router
 from server.routes.test_api import router as test_router
 from server.routes.ws import router as ws_router
 
-app = FastAPI(title="ChessGame")
+logger = logging.getLogger("chessgame")
+
+
+async def dip_loop() -> None:
+    """งานเบื้องหลัง: ทุกครั้งที่มีเฟรมใหม่ ส่งเข้า DIP pipeline แล้วกระจายผลไปหน้า board
+
+    - ประมวลผลเฉพาะเฟรมล่าสุด: ถ้ามีหลายเฟรมเข้ามาระหว่างประมวลผล จะข้ามไปเฟรมใหม่สุดเลย
+    - ใช้ asyncio.to_thread ให้ OpenCV ทำงานใน thread แยก WebSocket จึงไม่สะดุด
+    """
+    while True:
+        await hub.frame_event.wait()
+        hub.frame_event.clear()
+        try:
+            output = await asyncio.to_thread(pipeline.process, hub.latest_frame or b"")
+        except Exception:  # ภาพเสียหนึ่งเฟรมต้องไม่ทำให้ระบบหยุด
+            logger.exception("DIP ประมวลผลเฟรมไม่สำเร็จ")
+            continue
+        if output is None:
+            continue
+        hub.publish_dip(output.status)
+        if output.warped_jpeg is not None:
+            hub.publish_warped(output.warped_jpeg)
+        # output.squares (64 ช่อง) จะส่งต่อให้ ML อ่านกระดานในขั้นถัดไป
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_: FastAPI):
+    """เริ่ม dip_loop ตอนเซิร์ฟเวอร์เปิด และหยุดตอนปิด"""
+    task = asyncio.create_task(dip_loop())
+    yield
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+app = FastAPI(title="ChessGame", lifespan=lifespan)
 app.include_router(ws_router)
 app.include_router(game_router)
+app.include_router(calibration_router)
 app.include_router(test_router)
 
 # ตั้งสถานะเริ่มต้นของเกมไว้ใน hub ทันทีที่โหลดแอป
 # หน้า board ที่เชื่อมต่อเข้ามาจะได้ FEN ตำแหน่งเริ่มต้นเสมอ ไม่ว่าจะรันผ่าน run() หรือ uvicorn โดยตรง
 hub.set_state(game.snapshot())
+hub.publish_dip(
+    {"type": "dip", "calibrated": False}
+    if pipeline.calibration is None
+    else {"type": "dip", "calibrated": True, "still": False, "diff": None}
+)
 
 
 @app.get("/", include_in_schema=False)

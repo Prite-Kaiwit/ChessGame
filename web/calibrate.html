@@ -23,13 +23,65 @@
     </div>
   </header>
 
-  <main class="narrow-page">
+  <main class="calibrate-layout">
+    <!-- ซ้าย: ภาพจากกล้อง ให้คลิก/ลากเลือก 4 มุม -->
     <section class="panel">
-      <div class="panel-head"><h1>Calibrate</h1></div>
-      <div class="panel-body">
-        <p class="muted">หน้าสำหรับคลิกเลือก 4 มุมกระดาน จะทำในขั้น DIP (ขั้น 3)</p>
+      <div class="panel-head">
+        <h1>เลือก 4 มุมกระดาน</h1>
+        <span id="step-label" class="pill">คลิกมุมที่ 1: ซ้ายบน</span>
+      </div>
+      <div class="canvas-well">
+        <canvas id="corner-canvas" hidden></canvas>
+        <p id="canvas-placeholder" class="muted">กำลังโหลดภาพจากกล้อง…</p>
+      </div>
+      <div class="controls">
+        <button id="refresh-frame" type="button" class="button">ดึงภาพใหม่</button>
+        <button id="auto-detect" type="button" class="button">หามุมอัตโนมัติ</button>
+        <button id="clear-corners" type="button" class="button button-ghost">ล้างจุด</button>
+      </div>
+      <div class="panel-body help-text">
+        <p class="muted">
+          คลิกมุม<strong>ขอบนอกของช่องหมากรุก</strong> (ไม่รวมกรอบไม้) ตามลำดับ
+          ซ้ายบน → ขวาบน → ขวาล่าง → ซ้ายล่าง ตามที่เห็นในภาพ แล้วลากจุดเพื่อปรับให้ตรงได้
+          "หามุมอัตโนมัติ" ใช้ Canny + Hough เป็นค่าเริ่มต้น ควรตรวจและปรับเองอีกครั้ง
+        </p>
       </div>
     </section>
+
+    <!-- ขวา: ฝั่งผู้เล่น ตัวอย่างผลลัพธ์ และปุ่มบันทึก -->
+    <aside class="calibrate-side">
+      <div class="panel">
+        <div class="panel-head"><h2>ฝั่งผู้เล่นขาวอยู่ด้านไหนของภาพ</h2></div>
+        <div class="panel-body">
+          <div class="segmented" role="radiogroup" aria-label="ฝั่งผู้เล่นขาว">
+            <label><input type="radio" name="white-side" value="bottom" checked><span>ล่าง</span></label>
+            <label><input type="radio" name="white-side" value="top"><span>บน</span></label>
+            <label><input type="radio" name="white-side" value="left"><span>ซ้าย</span></label>
+            <label><input type="radio" name="white-side" value="right"><span>ขวา</span></label>
+          </div>
+          <p class="note">ระบบจะหมุนภาพให้ฝั่งขาวอยู่ล่าง ช่อง a1 จึงอยู่มุมล่างซ้ายเสมอ</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>ตัวอย่างภาพดัดตรง 800×800</h2>
+          <span id="preview-status" class="muted"></span>
+        </div>
+        <div class="image-well square">
+          <img id="preview-image" alt="ตัวอย่างภาพกระดานหลังดัดตรงพร้อมตาราง 8x8" hidden>
+          <span id="preview-placeholder">เลือกมุมครบ 4 จุดเพื่อดูตัวอย่าง</span>
+        </div>
+      </div>
+
+      <div class="save-row">
+        <button id="save-calibration" type="button" class="button button-primary" disabled>บันทึก</button>
+        <a class="button" href="/board">กลับหน้า Board</a>
+      </div>
+      <p id="calibrate-message" class="muted" role="status"></p>
+      <p id="calibrate-error" class="error-message" role="alert"></p>
+    </aside>
   </main>
+  <script src="/static/js/calibrate.js"></script>
 </body>
 </html>

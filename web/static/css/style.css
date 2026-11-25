@@ -278,6 +278,33 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .metric { margin-left: auto; color: var(--muted); font-size: 12px; }
 .metric strong { margin-left: 4px; color: var(--text); }
 
+/* ---------- หน้า /calibrate ---------- */
+.calibrate-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  gap: 16px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 16px 24px 32px;
+  align-items: start;
+}
+.calibrate-side { display: grid; gap: 16px; min-width: 0; }
+.canvas-well { display: grid; place-items: center; min-height: 240px; background: var(--surface-alt); }
+.canvas-well canvas { display: block; width: 100%; height: auto; touch-action: none; }
+.canvas-well .muted { padding: 24px; text-align: center; }
+.help-text { border-top: 1px solid var(--border); }
+.help-text strong { color: var(--text); font-weight: 600; }
+.save-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ตัวเลือกแบบปุ่มติดกัน (ใช้ radio จริงเพื่อให้ใช้คีย์บอร์ดได้) */
+.segmented { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segmented label { flex: 1; cursor: pointer; }
+.segmented label + label { border-left: 1px solid var(--border); }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span { display: block; padding: 6px 0; color: var(--muted); font-size: 13px; text-align: center; }
+.segmented input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 /* ---------- จอแคบ ---------- */
 @media (max-width: 1100px) {
   /* บอร์ดขึ้นบนเต็มแถว แล้ววางแผงซ้าย/ขวาคู่กันด้านล่าง */
@@ -292,4 +319,5 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
   .action-bar { padding: 0 16px 20px; }
   .action-bar .test-tools { margin-left: 0; }
   .narrow-page { padding: 12px 16px 24px; }
+  .calibrate-layout { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 24px; }
 }

@@ -28,8 +28,9 @@ python -m server.main --tunnel
 .\.venv\Scripts\python -m unittest discover -s tests -v
 ```
 
-`tests/test_integration.py` จะเปิดเซิร์ฟเวอร์ HTTPS จริงบนพอร์ต 8899 เอง แล้วทดสอบหน้าเว็บ,
-API ทดสอบ, WebSocket (รวมการทิ้งเฟรมเก่า) และกรณีหน้า board หลุดกะทันหัน
+`tests/test_dip.py` ทดสอบ DIP ด้วยภาพกระดานสังเคราะห์ที่ถ่ายเฉียง (ดัดกลับ, ชื่อช่องทั้ง 4 ทิศ, ภาพนิ่ง, หามุมอัตโนมัติ)
+`tests/test_integration.py` จะเปิดเซิร์ฟเวอร์ HTTPS จริงบนพอร์ต 8899 เอง (ใช้โฟลเดอร์ข้อมูลชั่วคราว) แล้วทดสอบหน้าเว็บ,
+API, WebSocket, การทิ้งเฟรมเก่า, หน้า board หลุดกะทันหัน และ calibrate → ภาพดัดตรง → สถานะภาพนิ่ง
 
 ## เปิดกล้องบนมือถือ: โหมด Tunnel (แนะนำ)
 
@@ -69,7 +70,7 @@ Cloudflare Quick Tunnel (`cloudflared`) สร้าง URL แบบ `https://<
 
 ## โครงสร้างและสถานะ
 
-- `server/`: FastAPI, WebSocket hub, สถานะเกม, สร้าง certificate, Cloudflare Tunnel (`tunnel.py`) และ stub ของ DIP/ML/AI
+- `server/`: FastAPI, WebSocket hub, สถานะเกม, สร้าง certificate, Cloudflare Tunnel (`tunnel.py`) DIP (OpenCV) และ stub ของ ML/AI
 - `web/`: หน้า HTML/JavaScript ธรรมดา ไม่มีขั้นตอน build
 - `certs/`: สร้างอัตโนมัติและไม่เก็บใน Git
 - Chessground เวอร์ชัน `9.2.1` โหลดจากสำเนาในเครื่อง `web/static/vendor/`
@@ -94,7 +95,7 @@ Hub เก็บภาพล่าสุดเพียงภาพเดีย�
 |---|---|
 | `/board` | ซ้าย: ภาพกล้องสดและภาพดัดตรง · กลาง: บอร์ดจำลองพร้อมลูกศรแนะนำ · ขวา: แผง AI, ML, ประวัติตาเดิน · ล่าง: ปุ่ม New game / Calibrate / Undo |
 | `/camera` | เปิดบนมือถือ ใช้ส่งภาพกล้อง |
-| `/calibrate` | เลือก 4 มุมกระดาน (ตอนนี้ยังเป็นหน้าชั่วคราว ทำจริงในขั้น DIP) |
+| `/calibrate` | คลิก/ลาก 4 มุมกระดาน เลือกฝั่งผู้เล่นขาว ดูตัวอย่างภาพดัดตรง แล้วบันทึก |
 
 ธีม Nordic มินิมอล: สีทั้งหมดเก็บเป็น CSS variables 2 ชุด (Light / Dark) ใน `web/static/css/style.css`
 สลับได้ที่ปุ่มมุมขวาบน ระบบจำค่าไว้ใน `localStorage` (`web/static/js/theme.js`)
@@ -107,3 +108,27 @@ Hub เก็บภาพล่าสุดเพียงภาพเดีย�
 - `POST /api/test/random-move`: (โหมดทดสอบ) เดินตาสุ่มที่ถูกกฎหนึ่งตา แล้วสุ่มตาถัดไปเป็น `best_move`
   เพื่อแสดงลูกศร เป็นค่าจำลอง ไม่ได้มาจาก AI
 - `POST /api/test/reset`: เหมือน `/api/game/new` คงไว้เพื่อให้โค้ดเดิมยังใช้ได้
+- `GET /api/calibration` / `POST /api/calibration`: อ่าน/บันทึกมุมกระดานและฝั่งผู้เล่น
+  (`{"corners": [[x, y] × 4], "white_side": "bottom|top|left|right"}` พิกัดเป็นสัดส่วน 0–1)
+- `POST /api/calibration/preview`: ดัดภาพล่าสุดตามมุมที่ส่งมา คืน JPEG (ยังไม่บันทึก)
+- `POST /api/calibration/auto`: หามุมอัตโนมัติด้วย Canny + Hough
+- `GET /api/frame/latest.jpg`: ภาพล่าสุดจากกล้อง
+
+## DIP (`server/dip/`)
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `calibration.py` | เก็บ 4 มุม (สัดส่วน 0–1) และฝั่งผู้เล่นขาว ใน `server/data/calibration.json` |
+| `board_detector.py` | homography 3×3 → `warpPerspective` เป็น 800×800 → หมุนให้ขาวอยู่ล่าง → ตัด 64 ช่อง a1–h8 → วาดตาราง |
+| `motion.py` | frame difference: `D = mean(|I_t − I_{t−1}|)` ถ้า `D < 4.0` ติดกัน 5 เฟรม (~1 วินาที) ถือว่าภาพนิ่ง |
+| `auto_corners.py` | (ทดลอง) Canny → HoughLinesP → เส้นนอกสุด 4 ด้าน → จุดตัดด้วยกฎของคราเมอร์ |
+| `pipeline.py` | รวมทุกขั้น ทำงานใน background task ทุกครั้งที่มีเฟรมใหม่ |
+
+สมการและเหตุผลของแต่ละขั้นอธิบายไว้ในคอมเมนต์ภาษาไทยของแต่ละไฟล์
+
+**วิธี calibrate:** วางมือถือให้นิ่ง (ใช้ขาตั้งถ้ามี) เห็นกระดานครบทั้ง 4 มุม → เปิด `/calibrate` บนคอม →
+คลิกมุมขอบนอกของช่องหมากรุก (ไม่รวมกรอบไม้) ตามลำดับ ซ้ายบน → ขวาบน → ขวาล่าง → ซ้ายล่าง →
+เลือกว่าฝั่งขาวอยู่ด้านไหนของภาพ → ดูตัวอย่างว่าเส้นตารางตรงกับช่องจริง → บันทึก
+ถ้าขยับกล้องหรือกระดาน ต้อง calibrate ใหม่
+
+ข้อความ binary ที่ส่งไปหน้า board ขึ้นต้นด้วย 1 ไบต์บอกชนิด: `0x01` ภาพกล้อง, `0x02` ภาพดัดตรง

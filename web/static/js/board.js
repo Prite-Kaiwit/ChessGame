@@ -1,6 +1,6 @@
-// หน้า /board: รับภาพและสถานะเกมจากเซิร์ฟเวอร์ผ่าน WebSocket แล้วแสดงผล
-// - ข้อความ binary = ภาพ JPEG จากกล้อง
-// - ข้อความ text   = สถานะเกม JSON { fen, best_move, last_move, turn, history, ... }
+// หน้า /board: รับภาพและสถานะจากเซิร์ฟเวอร์ผ่าน WebSocket แล้วแสดงผล
+// - ข้อความ binary: ไบต์แรกบอกชนิด 0x01 = ภาพกล้อง, 0x02 = ภาพกระดานที่ดัดตรงแล้ว ตามด้วย JPEG
+// - ข้อความ text  : JSON ที่มี type = "state" (สถานะเกม) หรือ "dip" (สถานะ DIP)
 
 const $ = (id) => document.getElementById(id);
 const boardElement = $("chessboard");
@@ -150,30 +150,62 @@ function setConnection(text, status) {
   connectionLabel.classList.toggle("is-bad", status === "bad");
 }
 
-function showFrame(blob) {
-  const url = URL.createObjectURL(blob);
-  frameElement.onload = () => URL.revokeObjectURL(url);
-  frameElement.src = url;
-  frameElement.hidden = false;
-  framePlaceholder.hidden = true;
-  framesThisSecond += 1;
+// แสดง JPEG ใน <img> ผ่าน object URL แล้วคืนหน่วยความจำเมื่อโหลดเสร็จ
+function showImage(img, placeholder, jpegBytes) {
+  const url = URL.createObjectURL(new Blob([jpegBytes], { type: "image/jpeg" }));
+  img.onload = () => URL.revokeObjectURL(url);
+  img.src = url;
+  img.hidden = false;
+  placeholder.hidden = true;
+}
+
+function handleBinary(buffer) {
+  const kind = new Uint8Array(buffer, 0, 1)[0];
+  const jpeg = buffer.slice(1);
+  if (kind === 0x01) {
+    showImage(frameElement, framePlaceholder, jpeg);
+    framesThisSecond += 1;
+  } else if (kind === 0x02) {
+    showImage($("warped-frame"), $("warped-placeholder"), jpeg);
+  }
+}
+
+// ---------- สถานะ DIP ----------
+function showDip(status) {
+  const pill = $("dip-status");
+  pill.classList.remove("is-ok", "is-bad");
+  if (!status.calibrated) {
+    pill.textContent = "ยังไม่ calibrate";
+    $("warped-frame").hidden = true;
+    $("warped-placeholder").hidden = false;
+    $("warped-placeholder").textContent = "กด Calibrate เพื่อเลือก 4 มุมกระดาน";
+    return;
+  }
+  // D = ค่า frame difference ของเฟรมล่าสุด, นิ่ง = D < T ติดกัน N เฟรม
+  const diff = typeof status.diff === "number" ? ` · D=${status.diff.toFixed(1)}` : "";
+  pill.textContent = `${status.still ? "ภาพนิ่ง" : "กำลังขยับ"}${diff}`;
+  if (status.still) pill.classList.add("is-ok");
 }
 
 function connect() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   boardSocket = new WebSocket(`${protocol}//${location.host}/ws/board`);
-  boardSocket.binaryType = "blob";
+  boardSocket.binaryType = "arraybuffer";
   boardSocket.addEventListener("open", () => setConnection("เชื่อมต่อแล้ว", "ok"));
   boardSocket.addEventListener("message", (event) => {
     if (typeof event.data !== "string") {
-      showFrame(event.data);
+      handleBinary(event.data);
       return;
     }
+    let message;
     try {
-      showState(JSON.parse(event.data));
+      message = JSON.parse(event.data);
     } catch {
       errorLabel.textContent = "ได้รับสถานะจากเซิร์ฟเวอร์ในรูปแบบที่ไม่ถูกต้อง";
+      return;
     }
+    if (message.type === "dip") showDip(message);
+    else showState(message);
   });
   boardSocket.addEventListener("close", () => {
     setConnection("ขาดการเชื่อมต่อ", "bad");
