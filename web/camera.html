@@ -35,10 +35,21 @@
       <div class="controls">
         <button id="start-camera" type="button" class="button button-primary">เริ่มส่งภาพ</button>
         <button id="stop-camera" type="button" class="button" disabled>หยุด</button>
-        <span class="metric">FPS <strong id="fps-value">0</strong></span>
+        <span class="metric">ส่งได้ <strong id="fps-value">0</strong> fps · ข้าม <strong id="skipped-value">0</strong></span>
       </div>
-      <div class="panel-body" style="border-top: 1px solid var(--border)">
-        <p class="muted">ส่งภาพ JPEG กว้างไม่เกิน 640px ที่ 5 FPS · วางมือถือให้เห็นกระดานครบทั้ง 4 มุม</p>
+      <div class="panel-body help-text">
+        <p class="muted" id="fps-label">fps เป้าหมาย</p>
+        <div class="segmented" role="radiogroup" aria-labelledby="fps-label">
+          <label><input type="radio" name="fps" value="5"><span>5</span></label>
+          <label><input type="radio" name="fps" value="10"><span>10</span></label>
+          <label><input type="radio" name="fps" value="15"><span>15</span></label>
+          <label><input type="radio" name="fps" value="20"><span>20</span></label>
+          <label><input type="radio" name="fps" value="30"><span>30</span></label>
+        </div>
+        <p class="note">
+          ภาพ JPEG กว้าง 640px · ถ้า "ข้าม" ขึ้นบ่อย แปลว่าเน็ตส่งไม่ทัน ระบบจะข้ามเฟรมเองเพื่อไม่ให้ภาพหน่วง
+          ลองลด fps ลง · วางมือถือให้เห็นกระดานครบทั้ง 4 มุม
+        </p>
         <p id="camera-error" class="error-message" role="status"></p>
       </div>
     </section>

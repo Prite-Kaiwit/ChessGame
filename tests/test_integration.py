@@ -214,10 +214,10 @@ class LiveServerTests(unittest.TestCase):
             self.assertEqual(decode_jpeg(preview).shape, (800, 800, 3))
             await asyncio.to_thread(http, "/api/calibration", "POST", body)
 
-            # ส่งภาพเดิมซ้ำ: หน้า board ต้องได้ภาพดัดตรง และสถานะ "นิ่ง" ภายใน N เฟรม
+            # ส่งภาพเดิมซ้ำ ~10 fps: หน้า board ต้องได้ภาพดัดตรง และสถานะ "นิ่ง" หลังนิ่งครบ 1 วินาที
             async with websockets.connect(f"{WSS}/ws/board", ssl=SSL_CTX) as board:
                 still = False
-                for _ in range(10):
+                for _ in range(30):
                     await camera.send(jpeg)
                     dip = await recv_json(board, "dip")
                     self.assertTrue(dip["calibrated"])

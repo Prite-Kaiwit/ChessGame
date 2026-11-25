@@ -120,7 +120,7 @@ Hub เก็บภาพล่าสุดเพียงภาพเดีย�
 |---|---|
 | `calibration.py` | เก็บ 4 มุม (สัดส่วน 0–1) และฝั่งผู้เล่นขาว ใน `server/data/calibration.json` |
 | `board_detector.py` | homography 3×3 → `warpPerspective` เป็น 800×800 → หมุนให้ขาวอยู่ล่าง → ตัด 64 ช่อง a1–h8 → วาดตาราง |
-| `motion.py` | frame difference: `D = mean(|I_t − I_{t−1}|)` ถ้า `D < 4.0` ติดกัน 5 เฟรม (~1 วินาที) ถือว่าภาพนิ่ง |
+| `motion.py` | frame difference: `D = mean(|I_t − I_{t−1}|)` ถ้า `D < 4.0` ต่อเนื่อง 1 วินาที (นับเป็นเวลา ไม่ขึ้นกับ fps) ถือว่าภาพนิ่ง |
 | `auto_corners.py` | (ทดลอง) Canny → HoughLinesP → เส้นนอกสุด 4 ด้าน → จุดตัดด้วยกฎของคราเมอร์ |
 | `pipeline.py` | รวมทุกขั้น ทำงานใน background task ทุกครั้งที่มีเฟรมใหม่ |
 

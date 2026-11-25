@@ -82,17 +82,34 @@ class BoardDetectorTests(unittest.TestCase):
 
 
 class MotionTests(unittest.TestCase):
-    def test_still_after_n_identical_frames_and_fires_once(self) -> None:
-        detector = StillnessDetector(threshold=4.0, frames_required=3)
+    def test_still_after_hold_time_regardless_of_fps(self) -> None:
         board = make_board()
-        results = [detector.update(board) for _ in range(6)]
+        for fps in (5, 15, 30):
+            with self.subTest(fps=fps):
+                detector = StillnessDetector(threshold=4.0, hold_seconds=1.0)
+                times = [i / fps for i in range(3 * fps)]  # ภาพนิ่ง 3 วินาที
+                results = [detector.update(board, now=t) for t in times]
 
-        # เฟรมแรกไม่มีเฟรมก่อนหน้า (diff = inf) จึงนับนิ่งได้ตั้งแต่เฟรมที่ 2: นิ่งครบ 3 ที่เฟรมที่ 4
-        self.assertEqual([r.still for r in results], [False, False, False, True, True, True])
-        self.assertEqual(sum(r.became_still for r in results), 1)
+                # เฟรมแรกไม่มีเฟรมก่อนหน้า จึงเริ่มจับเวลาที่เฟรมที่ 2 (t = 1/fps) → นิ่งที่ t ≥ 1/fps + 1.0
+                first_still = next(t for t, r in zip(times, results) if r.still)
+                self.assertAlmostEqual(first_still, 1 / fps + 1.0, delta=1e-9)
+                self.assertEqual(sum(r.became_still for r in results), 1)
+
+    def test_motion_restarts_the_hold_timer(self) -> None:
+        detector = StillnessDetector(threshold=4.0, hold_seconds=1.0)
+        board = make_board()
+        hand = board.copy()
+        cv2.rectangle(hand, (250, 250), (550, 700), (60, 120, 190), -1)
+
+        detector.update(board, now=0.0)
+        detector.update(board, now=0.1)               # เริ่มจับเวลานิ่งที่ 0.1
+        self.assertFalse(detector.update(hand, now=0.9).still)   # มือเข้ามา → รีเซ็ต
+        detector.update(hand, now=1.0)                # มือนิ่ง → เริ่มจับใหม่ที่ 1.0
+        self.assertFalse(detector.update(hand, now=1.5).still)
+        self.assertTrue(detector.update(hand, now=2.0).still)
 
     def test_small_noise_is_still_but_hand_is_motion(self) -> None:
-        detector = StillnessDetector(threshold=4.0, frames_required=1)
+        detector = StillnessDetector(threshold=4.0, hold_seconds=0.0)
         board = make_board()
         detector.update(board)
 
@@ -147,7 +164,8 @@ class CalibrationAndPipelineTests(unittest.TestCase):
 
     def test_pipeline_end_to_end(self) -> None:
         pipeline = DipPipeline(self.path)
-        jpeg = encode_jpeg(camera_view(make_board(), "bottom"), quality=90)
+        pipeline.detector.hold_seconds = 0.0  # ไม่ต้องรอ 1 วินาทีจริงในการทดสอบ
+        jpeg =encode_jpeg(camera_view(make_board(), "bottom"), quality=90)
 
         self.assertIsNone(pipeline.process(b"not a jpeg"))
         self.assertEqual(pipeline.process(jpeg).status, {"type": "dip", "calibrated": False})
