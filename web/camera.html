@@ -46,6 +46,13 @@
           <label><input type="radio" name="fps" value="20"><span>20</span></label>
           <label><input type="radio" name="fps" value="30"><span>30</span></label>
         </div>
+        <p class="muted lens-label" id="lens-label">เลนส์กล้อง</p>
+        <select id="lens-select" class="lens-select" aria-labelledby="lens-label" disabled>
+          <option value="">กล้องหลัง (ค่าเริ่มต้น)</option>
+        </select>
+        <p class="muted lens-label" id="zoom-label">ซูม <strong id="zoom-value">1.0x</strong> <span id="zoom-mode"></span></p>
+        <input id="zoom-range" class="zoom-range" type="range" min="1" max="3" step="0.1" value="1"
+               aria-labelledby="zoom-label" disabled>
         <p class="note">
           ภาพ JPEG กว้าง 640px · ถ้า "ข้าม" ขึ้นบ่อย แปลว่าเน็ตส่งไม่ทัน ระบบจะข้ามเฟรมเองเพื่อไม่ให้ภาพหน่วง
           ลองลด fps ลง · วางมือถือให้เห็นกระดานครบทั้ง 4 มุม

@@ -272,7 +272,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 /* ---------- หน้า /camera และ /calibrate ---------- */
 .narrow-page { max-width: 760px; margin: 0 auto; padding: 16px 24px 32px; }
 .video-frame { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--surface-alt); }
-.video-frame video { width: 100%; height: 100%; object-fit: contain; }
+.video-frame video { width: 100%; height: 100%; object-fit: contain; transform-origin: center; }
 .video-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); }
 .metric { margin-left: auto; color: var(--muted); font-size: 12px; }
@@ -321,3 +321,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
   .narrow-page { padding: 12px 16px 24px; }
   .calibrate-layout { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 24px; }
 }
+
+/* ตัวเลือกเลนส์และซูมในหน้ากล้อง */
+.lens-label { margin: 14px 0 6px; }
+.lens-select { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 14px; }
+.zoom-range { width: 100%; accent-color: var(--accent); }
