@@ -268,6 +268,18 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
   padding: 12px 24px 24px;
 }
 .action-bar .test-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.button-large { min-width: 180px; padding: 12px 20px; font-size: 16px; }
+.button kbd { margin-left: 6px; padding: 1px 6px; border: 1px solid currentColor; border-radius: 4px; font: inherit; font-size: 11px; opacity: .75; }
+
+/* แผง ML */
+.ml-collect { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.switch { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.setting-row { margin-top: 12px; }
+
+/* ผลของปุ่มเดินเสร็จ ใต้กระดาน */
+.move-status { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-size: 13px; }
+.move-status.is-warn { border-color: var(--danger, #DC2626); }
+.move-status[hidden] { display: none; }
 
 /* ---------- หน้า /camera และ /calibrate ---------- */
 .narrow-page { max-width: 760px; margin: 0 auto; padding: 16px 24px 32px; }
@@ -326,3 +338,14 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .lens-label { margin: 14px 0 6px; }
 .lens-select { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 14px; }
 .zoom-range { width: 100%; accent-color: var(--accent); }
+
+/* ---------- หน้า /dataset ---------- */
+.dataset-page { max-width: 1440px; margin: 0 auto; padding: 16px 24px 32px; }
+.sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+.sample-card { margin: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.sample-card img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface-alt); }
+.sample-card figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; }
+@media (max-width: 640px) {
+  .dataset-page { padding: 12px 16px 24px; }
+  .sample-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}

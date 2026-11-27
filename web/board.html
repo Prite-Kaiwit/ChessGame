@@ -17,6 +17,7 @@
       <a href="/board" aria-current="page">Board</a>
       <a href="/camera">Camera</a>
       <a href="/calibrate">Calibrate</a>
+      <a href="/dataset">Dataset</a>
     </nav>
     <div class="topbar-end">
       <span id="board-connection" class="pill">กำลังเชื่อมต่อ</span>
@@ -67,11 +68,25 @@
           </div>
         </div>
       </div>
+      <p id="move-status" class="move-status" role="status" hidden></p>
       <p id="board-error" class="error-message" role="status"></p>
     </section>
 
     <!-- ขวา: แผง AI, ML และประวัติตาเดิน -->
     <aside class="col-right">
+      <div class="panel">
+        <div class="panel-head"><h2>เราเล่นฝั่ง</h2></div>
+        <div class="panel-body">
+          <div class="segmented" role="radiogroup" aria-label="สีที่เราเล่น">
+            <label><input type="radio" name="player-color" value="white" checked><span>ขาว</span></label>
+            <label><input type="radio" name="player-color" value="black"><span>ดำ</span></label>
+          </div>
+          <label class="switch setting-row"><input id="auto-detect" type="checkbox" checked>
+            เดินตามกระดานจริงอัตโนมัติ</label>
+          <p class="note">เมื่อมีคนเดินบนกระดานจริงแล้วเอามือออก (ภาพนิ่ง 1 วินาที) กระดานบนเว็บจะเดินตามเอง
+            แล้ว AI แนะนำตาของเรา ถ้าปิดไว้ต้องกด "เดินเสร็จ" เอง</p>
+        </div>
+      </div>
       <div class="panel">
         <div class="panel-head"><h2>AI · Minimax + Alpha-Beta</h2></div>
         <div class="panel-body">
@@ -79,9 +94,10 @@
             <dt>ตาแนะนำ</dt><dd id="best-move">—</dd>
             <dt>คะแนนประเมิน</dt><dd id="evaluation-value">—</dd>
             <dt>ความลึก</dt><dd id="search-depth">—</dd>
+            <dt>โหนดที่ค้น</dt><dd id="search-nodes">—</dd>
             <dt>FEN</dt><dd><code id="fen-value">—</code></dd>
           </dl>
-          <p class="note">ตอนนี้ตาแนะนำเป็นการสุ่ม ยังไม่ได้มาจาก AI จริง</p>
+          <p class="note">คะแนนหน่วยเบี้ย ค่าบวก = ขาวได้เปรียบ · ±1000 = รุกจน</p>
         </div>
       </div>
       <div class="panel">
@@ -91,7 +107,18 @@
             <dt>โมเดล</dt><dd id="ml-model">ยังไม่โหลด</dd>
             <dt>ความมั่นใจเฉลี่ย</dt><dd id="ml-confidence">—</dd>
             <dt>ช่องที่ไม่แน่ใจ</dt><dd id="ml-uncertain">—</dd>
+            <dt>ไม่ตรงกับเกม</dt><dd id="ml-mismatch">—</dd>
           </dl>
+          <div class="ml-collect">
+            <label class="switch"><input id="ml-collect" type="checkbox"> เก็บข้อมูลเทรน</label>
+            <button id="ml-capture" type="button" class="button button-ghost" disabled
+                    title="ใช้เมื่อกระดานจริงตรงกับกระดานบนจอ">บันทึกภาพนี้</button>
+          </div>
+          <p class="note" id="ml-dataset">ยังไม่มีข้อมูล</p>
+          <p class="note">เก็บอัตโนมัติทุกครั้งที่ระบบหาตาเดินเจอ (Undo จะลบภาพล่าสุดทิ้ง)
+            ป้ายมาจากกระดานบนจอ จึงต้องให้กระดานจริงตรงกับบนจอเสมอ
+            · ตรวจและลบภาพที่ผิดได้ที่หน้า <a href="/dataset">Dataset</a></p>
+          <button id="ml-reload" type="button" class="button button-ghost">โหลดโมเดลใหม่</button>
         </div>
       </div>
       <div class="panel">
@@ -103,12 +130,15 @@
 
   <!-- ล่าง: ปุ่มควบคุมเกม -->
   <footer class="action-bar">
-    <button id="new-game" type="button" class="button button-primary">New game</button>
+    <button id="move-done" type="button" class="button button-primary button-large"
+            title="กด Spacebar ได้">เดินเสร็จ <kbd>Space</kbd></button>
+    <button id="new-game" type="button" class="button">New game</button>
     <a class="button" href="/calibrate">Calibrate</a>
     <button id="undo-move" type="button" class="button">Undo</button>
     <div class="test-tools">
       <span class="muted">โหมดทดสอบ</span>
       <button id="random-move" type="button" class="button button-ghost">สุ่มเดิน</button>
+      <button id="ai-move" type="button" class="button button-ghost">AI เดิน</button>
     </div>
   </footer>
 

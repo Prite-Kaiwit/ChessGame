@@ -17,6 +17,8 @@ from server.game_state import game
 from server.hub import hub
 from server.routes.calibration_api import router as calibration_router
 from server.routes.game_api import router as game_router
+from server.routes import game_api, ml_api
+from server.routes.ml_api import router as ml_router
 from server.routes.test_api import router as test_router
 from server.routes.ws import router as ws_router
 
@@ -42,7 +44,17 @@ async def dip_loop() -> None:
         hub.publish_dip(output.status)
         if output.warped_jpeg is not None:
             hub.publish_warped(output.warped_jpeg)
-        # output.squares (64 ช่อง) จะส่งต่อให้ ML อ่านกระดานในขั้นถัดไป
+        # ภาพเพิ่งนิ่ง: หาตาเดินอัตโนมัติ แล้วให้โมเดลอ่านกระดาน (ถ้ามีโมเดลแล้ว)
+        if output.squares is not None:
+            try:
+                await game_api.auto_detect()
+            except Exception:
+                logger.exception("ตรวจจับตาเดินอัตโนมัติไม่สำเร็จ")
+            try:
+                if await asyncio.to_thread(ml_api.read_board_now) is not None:
+                    ml_api.publish()
+            except Exception:
+                logger.exception("ML อ่านกระดานไม่สำเร็จ")
 
 
 @contextlib.asynccontextmanager
@@ -60,10 +72,12 @@ app.include_router(ws_router)
 app.include_router(game_router)
 app.include_router(calibration_router)
 app.include_router(test_router)
+app.include_router(ml_router)
 
 # ตั้งสถานะเริ่มต้นของเกมไว้ใน hub ทันทีที่โหลดแอป
 # หน้า board ที่เชื่อมต่อเข้ามาจะได้ FEN ตำแหน่งเริ่มต้นเสมอ ไม่ว่าจะรันผ่าน run() หรือ uvicorn โดยตรง
-hub.set_state(game.snapshot())
+hub.set_state(game.analyze())  # ให้ AI คิดตาแรกไว้เลย
+hub.publish_ml(ml_api.ml_status())
 hub.publish_dip(
     {"type": "dip", "calibrated": False}
     if pipeline.calibration is None
@@ -87,6 +101,12 @@ async def camera_page() -> FileResponse:
 async def board_page() -> FileResponse:
     """ส่งหน้าแสดงกระดานและผลวิเคราะห์"""
     return FileResponse(WEB_DIR / "board.html")
+
+
+@app.get("/dataset", include_in_schema=False)
+async def dataset_page() -> FileResponse:
+    """หน้าตรวจข้อมูลเทรน ML: ดูภาพพร้อมป้าย และลบภาพที่ป้ายผิด"""
+    return FileResponse(WEB_DIR / "dataset.html")
 
 
 @app.get("/calibrate", include_in_schema=False)

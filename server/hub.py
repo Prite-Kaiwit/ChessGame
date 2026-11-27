@@ -5,6 +5,8 @@
     "warped" : ภาพกระดานที่ดัดตรงแล้ว + ตาราง 8x8 (จาก DIP)
     "dip"    : สถานะ DIP (calibrate แล้วหรือยัง, ภาพนิ่งไหม, ค่า frame difference)
     "state"  : สถานะเกม (FEN, ตาแนะนำ, ประวัติ)
+    "ml"     : สถานะ ML (โมเดล, ข้อมูลที่เก็บ, ผลอ่านกระดานล่าสุด)
+    "detect" : ผลการหาตาเดินจากภาพ (แจ้งครั้งเดียว ไม่ส่งซ้ำให้หน้าที่เพิ่งเปิด)
 
 หลักการ "เก็บแค่ล่าสุด": ถ้าหน้า board ยังส่งของเก่าไม่ทัน แล้วมี event ชนิดเดียวกันมาใหม่
 จะแทนที่ของเก่าในคิวทันที ภาพจึงไม่ค้างสะสมจนดีเลย์
@@ -31,6 +33,7 @@ class Hub:
         self.latest_warped: bytes | None = None
         self.dip_status: dict[str, Any] = {}
         self.state: dict[str, Any] = {}
+        self.ml_status: dict[str, Any] = {}
         # สัญญาณ "มีเฟรมใหม่" ให้ DIP loop ตื่นมาประมวลผล
         self.frame_event = asyncio.Event()
         self._board_clients: set[asyncio.Queue[HubEvent]] = set()
@@ -52,6 +55,8 @@ class Hub:
             events.append(HubEvent("state", self.state))
         if self.dip_status:
             events.append(HubEvent("dip", self.dip_status))
+        if self.ml_status:
+            events.append(HubEvent("ml", self.ml_status))
         if self.latest_frame is not None:
             events.append(HubEvent("frame", self.latest_frame))
         if self.latest_warped is not None:
@@ -73,6 +78,15 @@ class Hub:
         """ส่งต่อภาพกระดานที่ดัดตรงแล้ว"""
         self.latest_warped = jpeg
         self._broadcast(HubEvent("warped", jpeg))
+
+    def publish_ml(self, status: dict[str, Any]) -> None:
+        """ส่งต่อสถานะ ML"""
+        self.ml_status = status
+        self._broadcast(HubEvent("ml", status))
+
+    def publish_detect(self, result: dict[str, Any]) -> None:
+        """แจ้งผลการหาตาเดินจากภาพ"""
+        self._broadcast(HubEvent("detect", {"type": "detect", **result}))
 
     def publish_dip(self, status: dict[str, Any]) -> None:
         """ส่งต่อสถานะ DIP"""

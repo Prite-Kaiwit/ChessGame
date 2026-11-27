@@ -14,6 +14,7 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 let chessground = null;   // อ็อบเจกต์กระดาน Chessground (null = ใช้กระดานสำรอง)
 let lastState = null;     // สถานะล่าสุด ใช้วาดลูกศรใหม่ตอนสลับธีม
+let changedSquares = [];  // ช่องที่ภาพเปลี่ยน จากปุ่มเดินเสร็จครั้งล่าสุด (วาดเป็นวงกลม)
 let boardSocket = null;
 let reconnectTimer = null;
 let leavingPage = false;
@@ -43,12 +44,17 @@ function drawSuggestion(uci) {
   if (!chessground) return;
   const brush = accentBrush();
   chessground.set({ drawable: { brushes: { [brush.name]: brush.def } } });
-  chessground.setAutoShapes(
-    isUci(uci) ? [{ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: brush.name }] : []
-  );
+  const shapes = isUci(uci) ? [{ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: brush.name }] : [];
+  changedSquares.forEach((square) => shapes.push({ orig: square, brush: "red" }));
+  chessground.setAutoShapes(shapes);
 }
 
-window.addEventListener("themechange", () => drawSuggestion(lastState?.best_move));
+// แสดงลูกศรตาแนะนำเฉพาะตาของเรา (ตาฝั่งตรงข้ามรอกระดานจริง)
+function suggestionFor(state) {
+  return state && state.our_turn !== false ? state.best_move : null;
+}
+
+window.addEventListener("themechange", () => drawSuggestion(suggestionFor(lastState)));
 
 // ---------- กระดานสำรอง (ใช้เมื่อโหลด Chessground ไม่ได้) ----------
 const pieceSymbols = {
@@ -116,11 +122,20 @@ function showState(state) {
   lastState = state;
 
   $("fen-value").textContent = state.fen;
-  $("turn-indicator").textContent = state.turn === "black" ? "ดำเดิน" : "ขาวเดิน";
-  $("best-move").textContent = state.best_move || "—";
-  $("evaluation-value").textContent =
-    typeof state.evaluation === "number" ? state.evaluation.toFixed(2) : "—";
-  $("search-depth").textContent = state.depth ?? "—";
+  const turnName = state.turn === "black" ? "ดำ" : "ขาว";
+  $("turn-indicator").textContent = state.our_turn === false ? `รอฝั่งตรงข้าม (${turnName})` : `ตาเรา (${turnName})`;
+  $("turn-indicator").classList.toggle("is-ok", state.our_turn !== false);
+  $("best-move").textContent = state.our_turn === false ? "รอฝั่งตรงข้ามเดิน" : state.best_move || "—";
+  document.querySelectorAll('input[name="player-color"]').forEach((radio) => {
+    radio.checked = radio.value === (state.player_color || "white");
+  });
+  if (typeof state.auto_detect === "boolean") $("auto-detect").checked = state.auto_detect;
+  $("evaluation-value").textContent = formatEvaluation(state.evaluation);
+  $("search-depth").textContent = state.depth ? `${state.depth} ตา` : "—";
+  $("search-nodes").textContent =
+    typeof state.nodes === "number"
+      ? `${state.nodes.toLocaleString()} (${state.search_ms ?? 0} ms)`
+      : "—";
 
   // แถบเตือนเดินผิดกฎ: แสดงเมื่อเซิร์ฟเวอร์ส่ง illegal_move มา (ใช้จริงเมื่อ ML อ่านกระดานได้)
   const warning = $("move-warning");
@@ -136,12 +151,119 @@ function showState(state) {
       lastMove: isUci(state.last_move)
         ? [state.last_move.slice(0, 2), state.last_move.slice(2, 4)]
         : undefined,
+      orientation: state.player_color === "black" ? "black" : "white", // ฝั่งเราอยู่ล่างเสมอ
+      movable: { color: state.is_game_over ? undefined : state.turn, dests: legalDests(state.legal_moves) },
     });
-    drawSuggestion(state.best_move);
+    drawSuggestion(suggestionFor(state));
   } else {
     renderFallback(state.fen, state.best_move);
   }
 }
+
+// แปลงรายการ UCI เป็น Map ต้นทาง → [ปลายทาง] ตามที่ Chessground ต้องการ
+function legalDests(moves) {
+  const dests = new Map();
+  (Array.isArray(moves) ? moves : []).forEach((uci) => {
+    const from = uci.slice(0, 2);
+    const to = uci.slice(2, 4);
+    if (!dests.has(from)) dests.set(from, []);
+    if (!dests.get(from).includes(to)) dests.get(from).push(to);
+  });
+  return dests;
+}
+
+// ผู้เล่นลากหมากบนจอ (แก้เมื่อระบบอ่านภาพไม่ได้) โปรโมตเป็นควีนอัตโนมัติ
+async function onBoardMove(from, to) {
+  let uci = from + to;
+  if (lastState?.legal_moves?.includes(`${uci}q`)) uci += "q";
+  changedSquares = [];
+  const payload = await postAction("/api/game/move", { uci });
+  if (payload) showMoveStatus(payload.notice || `เดิน ${uci} แล้ว`, Boolean(payload.notice));
+  else if (lastState) showState(lastState); // เดินไม่สำเร็จ วางหมากกลับที่เดิม
+}
+
+// ---------- ผลของปุ่มเดินเสร็จ ----------
+function showMoveStatus(text, warn = false) {
+  const label = $("move-status");
+  label.textContent = text;
+  label.classList.toggle("is-warn", warn);
+  label.hidden = !text;
+}
+
+// แสดงผลการหาตาเดินจากภาพ (มาจากปุ่มเดินเสร็จ หรือจากการตรวจจับอัตโนมัติผ่าน WebSocket)
+function showDetection(result) {
+  changedSquares = Array.isArray(result.changed) ? result.changed : [];
+  const changed = changedSquares.length ? ` · ช่องที่เปลี่ยน: ${changedSquares.join(", ")}` : "";
+  if (result.result === "moved") {
+    changedSquares = [];
+    const who = result.mover
+      ? (result.mover === (lastState?.player_color || "white") ? "เรา" : "ฝั่งตรงข้าม")
+      : "";
+    showMoveStatus(`${who ? `${who}: ` : ""}${result.message}${changed} · ถ้าผิดกด Undo แล้วลากหมากเอง`);
+  } else if (result.result === "baseline") {
+    showMoveStatus(result.message);
+  } else {
+    const options = (result.candidates || []).map((c) => c.san).join(", ");
+    showMoveStatus(
+      `${result.message}${changed}${options ? ` · ตัวเลือก: ${options}` : ""} · ลากหมากบนกระดานเพื่อบอกตาเดิน`,
+      true,
+    );
+  }
+  drawSuggestion(suggestionFor(lastState));
+}
+
+async function moveDone() {
+  const payload = await postAction("/api/game/move-done", undefined, false);
+  if (!payload) return;
+  showState(payload.state);
+  showDetection(payload);
+}
+
+// ---------- แผง ML ----------
+function showMl(status) {
+  $("ml-model").textContent = status.model || "ยังไม่โหลด";
+  const reading = status.reading;
+  $("ml-confidence").textContent = reading ? `${(reading.mean_confidence * 100).toFixed(1)}%` : "—";
+  $("ml-uncertain").textContent = reading ? (reading.uncertain.join(", ") || "ไม่มี") : "—";
+  $("ml-mismatch").textContent = reading ? (reading.mismatches.join(", ") || "ไม่มี") : "—";
+  const data = status.dataset || {};
+  $("ml-collect").checked = Boolean(data.enabled);
+  $("ml-capture").disabled = !data.enabled;
+  const c = data.counts || {};
+  $("ml-dataset").textContent = data.boards
+    ? `เก็บแล้ว ${data.boards} ภาพ = ${data.samples} ช่อง (ว่าง ${c.empty} · ขาว ${c.white} · ดำ ${c.black})`
+    : "ยังไม่มีข้อมูล";
+}
+
+async function mlAction(path, body) {
+  errorLabel.textContent = "";
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+    showMl(payload);
+  } catch (error) {
+    errorLabel.textContent = error instanceof Error ? error.message : "เรียก API ไม่สำเร็จ";
+  }
+}
+
+// ---------- เลือกสี / โหมดอัตโนมัติ ----------
+async function saveSettings(body) {
+  const payload = await postAction("/api/game/settings", body);
+  if (!payload && lastState) showState(lastState); // บันทึกไม่สำเร็จ คืนค่าเดิมบนจอ
+}
+document.querySelectorAll('input[name="player-color"]').forEach((radio) => {
+  radio.addEventListener("change", () => saveSettings({ player_color: radio.value }));
+});
+$("auto-detect").addEventListener("change", (event) => saveSettings({ auto_detect: event.target.checked }));
+
+$("ml-collect").addEventListener("change", (event) => mlAction("/api/ml/collect", { enabled: event.target.checked }));
+$("ml-capture").addEventListener("click", () => mlAction("/api/ml/capture"));
+$("ml-reload").addEventListener("click", () => mlAction("/api/ml/reload"));
 
 // ---------- WebSocket ----------
 function setConnection(text, status) {
@@ -183,7 +305,8 @@ function showDip(status) {
   }
   // D = ค่า frame difference ของเฟรมล่าสุด, นิ่ง = D < T ติดกัน N เฟรม
   const diff = typeof status.diff === "number" ? ` · D=${status.diff.toFixed(1)}` : "";
-  pill.textContent = `${status.still ? "ภาพนิ่ง" : "กำลังขยับ"}${diff}`;
+  const waiting = status.has_reference === false ? " · รอภาพก่อนเดิน" : "";
+  pill.textContent = `${status.still ? "ภาพนิ่ง" : "กำลังขยับ"}${diff}${waiting}`;
   if (status.still) pill.classList.add("is-ok");
 }
 
@@ -205,6 +328,8 @@ function connect() {
       return;
     }
     if (message.type === "dip") showDip(message);
+    else if (message.type === "ml") showMl(message);
+    else if (message.type === "detect") showDetection(message);
     else showState(message);
   });
   boardSocket.addEventListener("close", () => {
@@ -214,22 +339,58 @@ function connect() {
   });
 }
 
+// คะแนนหน่วยเบี้ย: ค่าเกิน ±900 คือ AI เห็นรุกจน (MATE_SCORE = 100000 centipawn)
+function formatEvaluation(value) {
+  if (typeof value !== "number") return "—";
+  if (value >= 900) return "ขาวรุกจนได้";
+  if (value <= -900) return "ดำรุกจนได้";
+  return (value > 0 ? "+" : "") + value.toFixed(2);
+}
+
 // ---------- ปุ่มด้านล่าง ----------
-async function postAction(path) {
+const actionButtons = document.querySelectorAll(".action-bar button");
+
+// คืน payload เมื่อสำเร็จ หรือ null เมื่อผิดพลาด (แสดงข้อความผิดพลาดให้แล้ว)
+async function postAction(path, body = undefined, applyState = true) {
   errorLabel.textContent = "";
+  // AI ใช้เวลาคิดสักครู่ ปิดปุ่มไว้กันกดซ้ำ
+  actionButtons.forEach((button) => { button.disabled = true; });
   try {
-    const response = await fetch(path, { method: "POST" });
+    const response = await fetch(path, {
+      method: "POST",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
-    showState(payload);
+    if (applyState) showState(payload);
+    return payload;
   } catch (error) {
     errorLabel.textContent = error instanceof Error ? error.message : "เรียก API ไม่สำเร็จ";
+    return null;
+  } finally {
+    actionButtons.forEach((button) => { button.disabled = false; });
   }
 }
 
-$("new-game").addEventListener("click", () => postAction("/api/game/new"));
-$("undo-move").addEventListener("click", () => postAction("/api/game/undo"));
+function clearMoveStatus() {
+  changedSquares = [];
+  showMoveStatus("");
+}
+
+$("move-done").addEventListener("click", moveDone);
+$("new-game").addEventListener("click", () => { clearMoveStatus(); postAction("/api/game/new"); });
+$("undo-move").addEventListener("click", () => { clearMoveStatus(); postAction("/api/game/undo"); });
+
+// Spacebar = เดินเสร็จ (เหมือนกดนาฬิกาหมากรุก) กดค้างไม่ซ้ำ และไม่ชนกับปุ่มที่โฟกัสอยู่
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || event.repeat) return;
+  if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select")) return;
+  event.preventDefault();
+  if (!$("move-done").disabled) moveDone();
+});
 $("random-move").addEventListener("click", () => postAction("/api/test/random-move"));
+$("ai-move").addEventListener("click", () => postAction("/api/game/ai-move"));
 
 // ---------- เริ่มต้น ----------
 try {
@@ -238,8 +399,9 @@ try {
   chessground = module.Chessground(boardElement, {
     fen: START_FEN,
     coordinates: true,
-    viewOnly: true,
     drawable: { enabled: false, visible: true },
+    movable: { free: false, showDests: true, events: { after: onBoardMove } },
+    premovable: { enabled: false },
   });
 } catch {
   renderFallback(START_FEN, null);

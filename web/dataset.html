@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChessGame · Dataset</title>
+  <script src="/static/js/theme.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/board">ChessGame</a>
+    <nav class="nav">
+      <a href="/board">Board</a>
+      <a href="/camera">Camera</a>
+      <a href="/calibrate">Calibrate</a>
+      <a href="/dataset" aria-current="page">Dataset</a>
+    </nav>
+    <div class="topbar-end">
+      <div class="theme-toggle" role="group" aria-label="ธีม">
+        <button type="button" data-theme-value="light">Light</button>
+        <button type="button" data-theme-value="dark">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="dataset-page">
+    <section class="panel">
+      <div class="panel-head">
+        <h1>ตรวจข้อมูลเทรน ML</h1>
+        <span id="dataset-summary" class="pill">กำลังโหลด</span>
+      </div>
+      <div class="panel-body help-text">
+        <p class="muted">
+          วงกลมสีแดงขอบคือ<strong>ป้ายที่ระบบติดไว้</strong> (ขาว/ดำ + ตัวอักษร P N B R Q K) อยู่ที่ฐานของแต่ละช่อง
+          ภาพที่ถูกต้อง: หมากทุกตัวมีวงกลมสีตรงกันอยู่ใต้ ช่องว่างไม่มีวงกลม ไม่มีมือ และเส้นตารางตรงกับช่อง
+          ถ้าไม่ใช่ กด <strong>ลบ</strong>
+        </p>
+        <div class="controls">
+          <button id="reload" type="button" class="button">โหลดใหม่</button>
+          <button id="delete-all" type="button" class="button button-ghost">ลบทั้งหมด</button>
+        </div>
+        <p id="dataset-error" class="error-message" role="status"></p>
+      </div>
+    </section>
+    <div id="sample-grid" class="sample-grid"></div>
+    <p id="empty-note" class="muted" hidden>ยังไม่มีข้อมูล เปิด "เก็บข้อมูลเทรน" ในหน้า Board แล้วเล่นตามปกติ</p>
+  </main>
+  <script src="/static/js/dataset.js"></script>
+</body>
+</html>

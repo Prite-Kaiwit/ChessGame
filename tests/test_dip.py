@@ -182,6 +182,18 @@ class CalibrationAndPipelineTests(unittest.TestCase):
         self.assertEqual(len(with_squares[0].squares), 64)
         self.assertEqual(decode_jpeg(outputs[-1].warped_jpeg).shape, (800, 800, 3))
 
+    def test_pipeline_captures_reference_when_board_becomes_still(self) -> None:
+        pipeline = DipPipeline(self.path)
+        pipeline.detector.hold_seconds = 0.0
+        pipeline.set_calibration(Calibration(normalized_corners(), "bottom"))
+        jpeg = encode_jpeg(camera_view(make_board(), "bottom"), quality=90)
+
+        self.assertIsNone(pipeline.reference)
+        outputs = [pipeline.process(jpeg) for _ in range(4)]
+
+        self.assertIsNotNone(pipeline.reference)
+        self.assertTrue(outputs[-1].status["has_reference"])
+
 
 if __name__ == "__main__":
     unittest.main()

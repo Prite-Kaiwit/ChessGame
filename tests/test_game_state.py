@@ -27,10 +27,11 @@ class GameStateTests(unittest.TestCase):
 
         self.assertEqual(game.board, chess.Board())
         self.assertEqual(state["history"], [])
-        self.assertIsNone(state["best_move"])
         self.assertIsNone(state["last_move"])
+        # AI คิดตาแรกของขาวใหม่ทันที
+        self.assertIn(chess.Move.from_uci(state["best_move"]), chess.Board().legal_moves)
 
-    def test_undo_removes_last_move_and_clears_recommendation(self) -> None:
+    def test_undo_removes_last_move_and_recomputes_recommendation(self) -> None:
         game = GameState()
         game.random_move()
         game.random_move()
@@ -38,7 +39,19 @@ class GameStateTests(unittest.TestCase):
         state = game.undo()
 
         self.assertEqual(len(state["history"]), 1)
-        self.assertIsNone(state["best_move"])
+        self.assertEqual(state["turn"], "black")
+        self.assertIn(chess.Move.from_uci(state["best_move"]), game.board.legal_moves)
+
+    def test_ai_move_plays_recommended_move_and_reports_search(self) -> None:
+        game = GameState(depth=2)
+        recommended = game.analyze()["best_move"]
+
+        state = game.ai_move()
+
+        self.assertEqual(state["last_move"], recommended)
+        self.assertEqual(state["depth"], 2)
+        self.assertGreater(state["nodes"], 0)
+        self.assertIsInstance(state["evaluation"], float)
 
     def test_undo_without_moves_raises(self) -> None:
         with self.assertRaises(ValueError):
