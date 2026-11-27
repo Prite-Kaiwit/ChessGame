@@ -66,15 +66,27 @@ class PieceClassifier:
     def name(self) -> str:
         return f"CNN {len(self.classes)} คลาส" if self.loaded else (self.error or "ยังไม่โหลด")
 
-    def read_board(self, board_image: np.ndarray) -> BoardReading:
-        """จำแนกทั้ง 64 ช่องในครั้งเดียว (batch 64)"""
+    def _forward(self, board_image: np.ndarray) -> np.ndarray:
+        """ความน่าจะเป็นทุกคลาสของทั้ง 64 ช่อง (64 x จำนวนคลาส) เรียงตาม chess.SQUARES"""
         crops = crop_all(board_image)
         blob = cv2.dnn.blobFromImages(crops, scalefactor=1 / 255, size=(CROP_W, CROP_H), swapRB=True)
         with self._lock:
             if self.net is None:
                 raise RuntimeError("ยังไม่ได้โหลดโมเดล")
             self.net.setInput(blob)
-            probs = self.net.forward().reshape(64, -1)
+            return self.net.forward().reshape(64, -1)
+
+    def square_probs(self, board_image: np.ndarray) -> dict[str, dict[str, float]]:
+        """ช่อง → {คลาส: ความน่าจะเป็น} ใช้ช่วยตัดสินตาเดินที่ภาพแยกไม่ออก"""
+        probs = self._forward(board_image)
+        return {
+            chess.square_name(square): {name: float(p) for name, p in zip(self.classes, probs[k])}
+            for k, square in enumerate(chess.SQUARES)
+        }
+
+    def read_board(self, board_image: np.ndarray) -> BoardReading:
+        """จำแนกทั้ง 64 ช่องในครั้งเดียว (batch 64)"""
+        probs = self._forward(board_image)
         best = probs.argmax(axis=1)
         names = [chess.square_name(square) for square in chess.SQUARES]
         return BoardReading(

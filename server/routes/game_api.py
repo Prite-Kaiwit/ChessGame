@@ -8,13 +8,17 @@ import asyncio
 
 from dataclasses import asdict
 
+import chess
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from server.dip.move_detect import infer_move, square_scores
+from server.dip.move_detect import Detection, infer_move, square_scores
 from server.dip.pipeline import pipeline
 from server.game_state import game
 from server.hub import hub
+from server.ml.move_resolver import pick_move
+from server.ml.piece_classifier import classifier
 from server.routes import ml_api
 
 
@@ -29,6 +33,23 @@ class SettingsBody(BaseModel):
 
 # กันการหาตาเดินซ้อนกัน (ปุ่มเดินเสร็จกับการตรวจจับอัตโนมัติทำงานพร้อมกัน → เดินซ้ำสองครั้ง)
 _detect_lock = asyncio.Lock()
+
+
+def _resolve_with_classifier(detection: Detection, after: np.ndarray) -> None:
+    """DIP แยกตาเดินผู้สมัครไม่ออก: ให้โมเดลจำแนกหมากดูภาพหลังเดินแล้วช่วยเลือก (ดู server/ml/move_resolver.py)"""
+    top = [c for c in detection.candidates if c.explained == detection.candidates[0].explained] \
+        if detection.candidates else []
+    if len(top) < 2:
+        return
+    try:
+        probs = classifier.square_probs(after)
+    except Exception:   # โมเดลมีปัญหา: ใช้ผล DIP เดิม (ไม่เดา)
+        return
+    uci = pick_move(game.board, [c.uci for c in top], probs, classifier.expected_labels)
+    if uci is not None:
+        san = game.board.san(chess.Move.from_uci(uci))
+        detection.move = uci
+        detection.reason = f"ตรวจพบ {san} (ML ช่วยตัดสิน: {detection.reason})"
 
 
 async def detect_and_apply(source: str) -> dict:
@@ -60,6 +81,8 @@ async def detect_and_apply(source: str) -> dict:
         white_side = pipeline.calibration.white_side
         scores = await asyncio.to_thread(square_scores, before, after, white_side)
         detection = infer_move(game.board.copy(), scores, white_side=white_side)
+        if detection.move is None and not detection.blocked and classifier.loaded:
+            await asyncio.to_thread(_resolve_with_classifier, detection, after)
         report = {
             "changed": detection.changed,
             "candidates": [asdict(c) for c in detection.candidates],
